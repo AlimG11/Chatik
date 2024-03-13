@@ -1,44 +1,82 @@
 {
+    "IP": "127.0.0.1",
+    "Log": "log.txt",
+    "Port": "12000",
     "User": [
         {
-            "Username": "User1",
-            "Password": "Password1"
+            "Username": "Alim",
+            "Password": "Parol",
+            "Color": "1"
         },
         {
-            "Username": "User2",
-            "Password": "Password2"
+            "Username": "Nick",
+            "Password": "2222",
+            "Color": "2"
         },
         {
-            "Username": "User3",
-            "Password": "Password3"
+            "Username": "R300R",
+            "Password": "qwerty",
+            "Color": "3"
         },
         {
             "Username": "User4",
-            "Password": "Password4"
+            "Password": "Password4",
+            "Color": "4"
         },
         {
             "Username": "User5",
-            "Password": "Password5"
+            "Password": "Password5",
+            "Color": "5"
         },
         {
             "Username": "User6",
-            "Password": "Password6"
+            "Password": "Password6",
+            "Color": "6"
         },
         {
             "Username": "User7",
-            "Password": "Password7"
+            "Password": "Password7",
+            "Color": "7"
         },
         {
             "Username": "User8",
-            "Password": "Password8"
+            "Password": "Password8",
+            "Color": "8"
         },
         {
             "Username": "User9",
-            "Password": "Password9"
+            "Password": "Password9",
+            "Color": "9"
         },
         {
             "Username": "User10",
-            "Password": "Password10"
+            "Password": "Password10",
+            "Color": "10"
+        },
+        {
+            "Username": "u11",
+            "Password": "p11",
+            "Color": "11"
+        },
+        {
+            "Username": "u12",
+            "Password": "p12",
+            "Color": "12"
+        },
+        {
+            "Username": "u13",
+            "Password": "p13",
+            "Color": "13"
+        },
+        {
+            "Username": "u14",
+            "Password": "p14",
+            "Color": "14"
+        },
+        {
+            "Username": "u15",
+            "Password": "p15",
+            "Color": "15"
         }
     ]
 }
