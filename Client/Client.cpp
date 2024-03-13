@@ -1,163 +1,197 @@
-#include <iostream>
-#pragma comment(lib,"ws2_32.lib")//to get access to some functions
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#ifndef _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#endif
+
+#include <windows.h>
 #include <winsock2.h>
-#include <Windows.h>
-#include <string>
-#include <fstream>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#include <iostream>
 #include <vector>
+#include <fstream>
 #include <nlohmann/json.hpp>
-#pragma warning (disable:4996)
 
-SOCKET Connection;
+#pragma comment(lib, "Ws2_32.lib")
 
-//Структура нужна для чтения данных из config.json
-struct UserData {
-    std::string username;
-    std::string password;
+SOCKET ConnectSock;
+
+HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+const WORD conclr = 7;
+
+void client();
+
+struct User {
+	std::string name;
+	std::string password;
+	WORD color;
 };
-
-//Считываем данные из config.json
-std::vector<UserData> read_data() {
-    std::vector<UserData> config(0);
-    std::ifstream config_file("config.json");
-    nlohmann::json jsonData;
-
-    if (config_file.is_open()) {
-        config_file >> jsonData;
-        size_t size = jsonData["User"].size();
-        config.resize(size);
-        for (int i = 0; i < size; ++i) {
-            config[i].username = jsonData["User"][i]["Username"];
-            config[i].password = jsonData["User"][i]["Password"];
-            // std::cout << "Username: " << config[i].username << " ,password: " << config[i].password << " msg : " << config[i].visible_msg << '\n';
-        }
-    }
-    else {
-        std::cerr << "Error: could not open config.json \n";
-    }
-    return config;
-}
-
-//создаем функцию для принятия сообщения,которое было отправлено сервером
-void ClientHandler() {
-    char msg[256];
-    //создадим бесконечный цикл,в котором будем смотреть сообщение от сервера и выводить его на экран
-    while (true) {
-        recv(Connection, msg, sizeof(msg), NULL);
-
-        std::cout << msg << '\n';
-    }
-}
-
-//Функция проверяет совпадает ли имя пользователя и пароль из конфигурационного файла с тем,что ввел пользователь
-bool isAuthenticated(const std::string& username, const std::string& password, const std::vector<UserData>& users, size_t size) {
-    for (int i = 0; i < size; i++) {
-        //  std::cout << username << ' ' << config[i].username << ' ' << password << ' ' << config[i].password << '\n';
-        if (username == users[i].username && password == users[i].password) {
-            return true;
-        }
-    }
-    return false;
-}
-
-//Функция,проверяющая корректность сообщения
-bool IsValidMessage(const char* message) {
-    //Длина сообщения не больше 64 символов 
-    if (strlen(message) > 64) {
-        return false;
-    }
-
-    // Код символов ы сообщении имеют код ASCII >= 32.
-    for (size_t i = 0; i < strlen(message); i++) {
-        if (message[i] < 32) {
-            return false;
-        }
-    }
-
-    //Сообщение должно заканчиваться символами: '.', '!', or '?'.
-    char lastChar = message[strlen(message) - 1];
-    if (lastChar != '.' && lastChar != '!' && lastChar != '?') {
-        return false;
-    }
-
-
-    return true;
-}
+std::vector<User> users;
 
 int main(int argc, char* argv[]) {
-    WSAData wsaData;
-    WORD DLLVersion = MAKEWORD(2, 1);
-    if (WSAStartup(DLLVersion, &wsaData) != 0) {
-        std::cout << "Error: Failed to initialize Winsock." << std::endl;
-        return 1;
-    }
 
-    SOCKADDR_IN addr;
-    int sizeofaddr = sizeof(addr);
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    addr.sin_port = htons(1111);
-    addr.sin_family = AF_INET;
+	WSADATA wsaData;
 
-    Connection = socket(AF_INET, SOCK_STREAM, NULL);
-    if (connect(Connection, (SOCKADDR*)&addr, sizeofaddr) != 0) {
-        std::cout << "Error: Failed to connect to the server." << std::endl;
-        return 1;
-    }
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		std::cout << "WSAStartup failed!\n";
+		return 1;
+	}
+	std::ifstream config(argv[1]);
+	if (!config) {
+		std::cout << "Couldnt open config file!\n";
+		return -1;
+	}
+	nlohmann::json jsData;
+	config >> jsData;
+
+	std::string k = jsData["IP"];
+	const char* IP = k.c_str();
+	std::string p = jsData["Port"];
+	u_short port = 0;
+	for (int i = 0; i < p.size(); ++i) {
+		port = port * 10 + (p[i] - '0');
+	}
+
+	SOCKADDR_IN addr{};
+	int addrSize = sizeof(addr);
+	addr.sin_addr.s_addr = inet_addr(IP);
+	addr.sin_port = htons(port);
+	addr.sin_family = AF_INET;
 
 
-    std::vector<UserData> user = read_data();
-    size_t size = user.size();
-    std::string username;
-    std::cout << "Enter your username: ";
-    std::cin >> username;
+	User add;
+	std::string clr;
+	for (int i = 0; i < jsData["User"].size(); ++i) {
+		add.name = jsData["User"][i]["Username"];
+		add.password = jsData["User"][i]["Password"];
+		add.color = 0;
+		clr = jsData["User"][i]["Color"];
+		for (int i = 0; i < clr.size(); ++i) {
+			add.color = add.color * 10 + (clr[i] - '0');
+		}
+		users.push_back(add);
+	}
+	config.close();
 
-    std::string password;
-    std::cout << "Enter your password: ";
-    std::cin >> password;
-    if (!isAuthenticated(username, password, user, size)) {
-        std::cout << "Authentication failed. Invalid username or password.";
-        return -1;
-    }
+	ConnectSock = socket(AF_INET, SOCK_STREAM, 0);
+	if (connect(ConnectSock, (SOCKADDR*)&addr, addrSize) != 0) {
+		std::cout << "Error: Failed to connect to the server\n";
+		closesocket(ConnectSock);
+		return 1;
+	}
+	else {
+		std::cout << "Connect!\n";
+	}
+	char name[64]{ 0 };
+	char password[64]{ 0 };
+	bool find = false;
+	while (true) {
+		std::cout << "Enter you username: ";
+		std::cin >> name;
+		std::cout << "Enter you password: ";
+		std::cin >> password;
+		std::system("cls");
+		std::cout << "Enter you username: " << name << "\nEnter you password: ";
+		for (int i = 0; i < strlen(password); ++i) {
+			std::cout << '*';
+		}
+		std::cout << '\n';
 
-    if (isAuthenticated(username, password, user, size)) {
-        std::cout << username << " entered to chat.\n";
+		send(ConnectSock, name, 64, 0);
+		Sleep(100);
+		send(ConnectSock, password, 64, 0);
 
-    }
+		for (size_t i = 0; i < users.size(); ++i) {
+			if (name == users[i].name && password == users[i].password) {
+				find = true;
+				std::cout << "You are logged in chat!\n";
+				break;
+			}
+		}
+		if (!find) {
+			std::system("cls");
+			std::cout << "Incorrect username or password!\n";
+		}
+		else {
+			break;
+		}
+	}
 
-    send(Connection, username.c_str(), (int)username.size(), NULL);
-    Sleep(100);
-    send(Connection, password.c_str(), (int)password.size(), NULL);
+	CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)client, NULL, NULL, NULL);
 
-    // std::cout << isAuthenticated(username, password, user) << '\n';
-    CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandler, NULL, NULL, NULL);
-    char msg[256]{ 0 };
-    bool istrue = true;
-    while (true) {
-        std::cin.getline(msg, sizeof(msg));
-        char new_[256]{ 0 };
+	char msg[64]{ 0 };
+	while (true) {
+		do {
+			std::cin.getline(msg, 64);
+			find = false;
+			if (std::string(msg) == "Exit.") {
+				send(ConnectSock, msg, 64, 0);
+				std::cout << "You are exit the chat.\n";
+				closesocket(ConnectSock);
+				WSACleanup();
+				return 0;
+			}
 
-        if (std::string(msg) == "exit.") {
-            std::cout << "You left the chat.\n";
-            send(Connection, msg, sizeof(msg), NULL);
-            // recv(Connection, msg, sizeof(msg), NULL);
-            return -2;
-        }
+			if (strlen(msg) != 0) {
+				for (int i = 0; i < strlen(msg); ++i) {
+					if ((unsigned char)msg[i] < 32) {
+						find = true;
+						std::cout << "Invalid input message: char >= 32!\n";
+						break;
+					}
+				}
 
-        if (strlen(msg) == 0) {
-            continue;
-        }
+				if (!find && msg[strlen(msg) - 1] != '.' && msg[strlen(msg) - 1] != '!' && msg[strlen(msg) - 1] != '?') {
+					find = true;
+					std::cout << "The message must end in the following characters: '.' or '!' or '?'\n";
+				}
+			}
+		} while (find);
 
-        if (strlen(msg) != 0 && IsValidMessage(msg)) {
-            std::string msg_with_username = username + ": " + msg;
-            send(Connection, msg_with_username.c_str(), int(msg_with_username.size()), NULL);
-        }
-        else {
-            std::cout << "Invalid message. Message must be:\n";
-            std::cout << "less than 64 characters;\n";
-            std::cout << "contain only printable ASCII characters;\n";
-            std::cout << "end with '.', '!', or '?'.\n";
-        }
-    }
-    closesocket(Connection);
-    return 0;
+		send(ConnectSock, msg, 64, 0);
+	}
+
+	shutdown(ConnectSock, SD_SEND);
+	closesocket(ConnectSock);
+	WSACleanup();
+	return 0;
+}
+
+void client() {
+	std::string msg;
+	char tmp[65]{ 0 };
+	WORD color;
+	//бесконечный цикл, который смотрит сообщение от сервера и выводит его на экран
+	while (true) {
+		msg = "";
+		recv(ConnectSock, tmp, 65, 0);
+		Sleep(200);
+		//std::cout << tmp << '\n';
+		if (strlen(tmp) > 1) {
+			if (tmp[1] == '\t') {
+				for (int i = 0; i < strlen(tmp) - 1; ++i) {
+					msg += tmp[i + 2];
+				}
+
+				color = (unsigned char)tmp[0] - 32;
+
+				SetConsoleTextAttribute(hConsole, color);
+				std::cout << msg << '\n';
+				SetConsoleTextAttribute(hConsole, conclr);
+				break;
+			}
+			for (int i = 0; i < strlen(tmp) - 1; ++i) {
+				msg += tmp[i + 1];
+			}
+
+			color = (unsigned char)tmp[0] - 32;
+			//std::cout << tmp << "|\n" << (int)tmp[1] << "|\n" << (int)tmp[0] << "|\nColor: " << color << "|\n";
+			SetConsoleTextAttribute(hConsole, color);
+			std::cout << msg << '\n';
+			SetConsoleTextAttribute(hConsole, conclr);
+		}
+	}
 }
